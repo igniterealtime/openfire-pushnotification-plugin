@@ -151,11 +151,6 @@ public class PushServiceManager
 
     public static Map<JID,Set<String>> getServiceNodes( final User user )
     {
-        for ( Map.Entry<String, String> e : user.getProperties().entrySet() )
-        {
-            Log.debug( "Property for user {}: key {} -> {}", new Object[] { user.toString(), e.getKey(), e.getValue() } );
-        }
-
         final Map<JID, Set<String>> result = new HashMap<>();
         final String propValue = user.getProperties().get( USER_PROPERTY_KEY_PUSH_SERVICES );
         if ( propValue != null )
@@ -172,7 +167,7 @@ public class PushServiceManager
                 }
             }
         }
-
+        Log.trace( "User '{}' has {} push notification services configured.", user, result.size());
         return result;
     }
 

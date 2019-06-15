@@ -63,14 +63,6 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
     @Override
     public void interceptPacket( final Packet packet, final Session session, final boolean incoming, final boolean processed ) throws PacketRejectedException
     {
-        if ( new JID("p2.siacs.eu").equals( packet.getFrom() ))
-        {
-            Log.error( "<--- {}", packet );
-        }
-        if ( new JID("p2.siacs.eu").equals( packet.getTo() ))
-        {
-            Log.error( "---> {}", packet );
-        }
         if ( incoming ) {
             return;
         }
@@ -93,8 +85,6 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
             return;
         }
 
-        Log.trace( "intercepted {}", packet );
-
         final User user;
         try
         {
@@ -106,7 +96,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
             return;
         }
 
-        Log.trace( "If this user has push services configured, pushes need to be sent." );
+        Log.trace( "If user '{}' has push services configured, pushes need to be sent for a message that just arrived.", user );
         tryPushNotification( user );
     }
 
@@ -158,9 +148,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
      */
     @Override
     public void messageBounced( final Message message )
-    {
-
-    }
+    {}
 
     /**
      * Notification message indicating that a message was stored offline since the target entity
