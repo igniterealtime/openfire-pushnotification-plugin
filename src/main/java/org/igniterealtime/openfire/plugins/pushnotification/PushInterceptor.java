@@ -173,6 +173,11 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
     @Override
     public void messageStored( final Message message )
     {
+        if ( message.getBody() == null || message.getBody().isEmpty() )
+        {
+            return;
+        }
+
         Log.trace( "Message stored to offline storage. Try to send push notification." );
         final User user;
         try
