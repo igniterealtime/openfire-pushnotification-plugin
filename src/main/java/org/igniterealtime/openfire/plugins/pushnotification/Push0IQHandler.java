@@ -29,6 +29,8 @@ import org.xmpp.packet.IQ;
 import org.xmpp.packet.JID;
 import org.xmpp.packet.PacketError;
 
+import java.sql.SQLException;
+
 /**
  * An IQ handler implementation for the protocol defined by namespace "urn:xmpp:push:0"
  * in XEP-0357.
@@ -118,22 +120,38 @@ public class Push0IQHandler extends IQHandler
 
         Log.trace( "intercepted {}", packet );
 
-        final IQ response;
+        IQ response;
         switch( action )
         {
             case "enable":
                 final Element publishOptions = parsePublishOptions( packet );
-                PushServiceManager.register( user, pushService, node, publishOptions );
-
-                Log.debug( "Registered push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername() } );
-                response = IQ.createResultIQ( packet );
+                try
+                {
+                    PushServiceManager.register( user, pushService, node, publishOptions );
+                    Log.debug( "Registered push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername() } );
+                    response = IQ.createResultIQ( packet );
+                }
+                catch ( SQLException e )
+                {
+                    Log.warn( "An exception occurred while registering push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername(), e } );
+                    response = IQ.createResultIQ( packet );
+                    response.setError( PacketError.Condition.internal_server_error );
+                }
                 break;
 
             case "disable":
-                PushServiceManager.deregister( user, pushService, node );
-
-                Log.debug( "Deregistered push service '{}', node '{}', for user '{}'.", new Object[] { pushService.toString(), node, user.getUsername() } );
-                response = IQ.createResultIQ( packet );
+                try
+                {
+                    PushServiceManager.deregister( user, pushService, node );
+                    Log.debug( "Deregistered push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername() } );
+                    response = IQ.createResultIQ( packet );
+                }
+                catch ( SQLException e )
+                {
+                    Log.warn( "An exception occurred while deregistering push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername(), e } );
+                    response = IQ.createResultIQ( packet );
+                    response.setError( PacketError.Condition.internal_server_error );
+                }
                 break;
 
             default:

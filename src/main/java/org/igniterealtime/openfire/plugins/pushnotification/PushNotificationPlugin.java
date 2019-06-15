@@ -19,16 +19,20 @@ import org.jivesoftware.openfire.OfflineMessageStrategy;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.container.Plugin;
 import org.jivesoftware.openfire.container.PluginManager;
+import org.jivesoftware.openfire.event.UserEventDispatcher;
+import org.jivesoftware.openfire.event.UserEventListener;
 import org.jivesoftware.openfire.handler.IQHandler;
 import org.jivesoftware.openfire.interceptor.InterceptorManager;
-import org.jivesoftware.openfire.interceptor.PacketInterceptor;
+import org.jivesoftware.openfire.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * An Openfire plugin that adds push notification support, as defined in XEP-0357.
@@ -36,7 +40,7 @@ import java.util.List;
  * @author Guus der Kinderen, guus.der.kinderen@gmail.com
  * @see <a href="https://xmpp.org/extensions/xep-0357.html">XEP-0357: "Push Notifications"</a>
  */
-public class PushNotificationPlugin implements Plugin
+public class PushNotificationPlugin implements Plugin, UserEventListener
 {
     private static final Logger Log = LoggerFactory.getLogger( PushNotificationPlugin.class );
 
@@ -59,6 +63,7 @@ public class PushNotificationPlugin implements Plugin
         XMPPServer.getInstance().getIQRouter().addHandler( push0IQHandler );
         registeredHandlers.add( push0IQHandler );
 
+        UserEventDispatcher.addListener( this );
         InterceptorManager.getInstance().addInterceptor( interceptor );
         OfflineMessageStrategy.addListener( interceptor );
 
@@ -101,9 +106,32 @@ public class PushNotificationPlugin implements Plugin
             }
         }
 
+        UserEventDispatcher.removeListener( this );
         OfflineMessageStrategy.removeListener( interceptor );
         InterceptorManager.getInstance().removeInterceptor( interceptor );
 
         Log.debug( "Destroyed." );
     }
+
+    @Override
+    public void userCreated( final User user, final Map<String, Object> params )
+    {}
+
+    @Override
+    public void userDeleting( final User user, final Map<String, Object> params )
+    {
+        Log.info( "User '{}' is being deleted. Removing any associated push service data.", user.toString() );
+        try
+        {
+            PushServiceManager.deregister( user );
+        }
+        catch ( SQLException e )
+        {
+            Log.warn( "An exception occurred while trying to remove push service data for a user that is being deleted: '{}'.", user.toString(), e );
+        }
+    }
+
+    @Override
+    public void userModified( final User user, final Map<String, Object> params )
+    {}
 }

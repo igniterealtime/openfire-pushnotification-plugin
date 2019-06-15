@@ -7,5 +7,11 @@
     <version>${project.version}</version>
 
     <author>Guus der Kinderen</author>
-    <date>06/10/2019</date>
+    <date>06/15/2019</date>
+
+    <minJavaVersion>1.8</minJavaVersion>
+
+    <databaseKey>pushnotification</databaseKey>
+    <databaseVersion>1</databaseVersion>
+
 </plugin>

@@ -32,6 +32,7 @@ import org.xmpp.packet.JID;
 import org.xmpp.packet.Message;
 import org.xmpp.packet.Packet;
 
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.Set;
 
@@ -102,16 +103,30 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
 
     private void tryPushNotification( User user )
     {
-        final Map<JID, Set<String>> serviceNodes = PushServiceManager.getServiceNodes( user );
-        for ( final Map.Entry<JID, Set<String>> serviceNode : serviceNodes.entrySet() )
+        final Map<JID, Map<String, Element>> serviceNodes;
+        try
+        {
+            serviceNodes = PushServiceManager.getServiceNodes( user );
+            Log.trace( "For user '{}', {} push service(s) are configured.", user.toString(), serviceNodes.size() );
+        }
+        catch ( Exception e )
+        {
+            Log.warn( "An exception occurred while obtain push notification service nodes for user '{}'. If the user has push notifications enabled, these have not been sent.", user.toString(), e );
+            return;
+        }
+
+        for ( final Map.Entry<JID, Map<String, Element>> serviceNode : serviceNodes.entrySet() )
         {
             final JID service = serviceNode.getKey();
-            Log.trace( "Found service: {}", service );
+            Log.trace( "For user '{}', found service '{}'", user.toString(), service );
 
-            final Set<String> nodes = serviceNode.getValue();
-            for ( final String node : nodes )
+            final Map<String, Element> nodes = serviceNode.getValue();
+            for ( final Map.Entry<String, Element> nodeConfig : nodes.entrySet() )
             {
-                Log.trace( "Found node: {}", node );
+                final String node = nodeConfig.getKey();
+                final Element publishOptions = nodeConfig.getValue();
+
+                Log.trace( "For user '{}', found node '{}' of service '{}'", new Object[] { user.toString(), node, service });
                 final IQ push = new IQ( IQ.Type.set );
                 push.setTo( service );
                 push.setFrom( XMPPServer.getInstance().getServerInfo().getXMPPDomain() );
@@ -121,16 +136,15 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
                 final Element item = publish.addElement( "item" );
                 item.addElement( QName.get( "notification", "urn:xmpp:push:0" ) );
 
-                final Element publishOptions = PushServiceManager.getPublishOptions( user, service, node );
                 if ( publishOptions != null )
                 {
-                    Log.trace( "Adding publish options" );
+                    Log.trace( "For user '{}', found publish options for node '{}' of service '{}'", new Object[] { user.toString(), node, service });
                     final Element pubOptEl = push.getChildElement().addElement( "publish-options" );
                     pubOptEl.add( publishOptions );
                 }
                 try
                 {
-                    Log.trace( "Routing push notification to: {}", push.getTo() );
+                    Log.trace( "For user '{}', Routing push notification to '{}'", user.toString(), push.getTo() );
                     XMPPServer.getInstance().getRoutingTable().routePacket( push.getTo(), push, true );
                 } catch ( Exception e ) {
                     Log.warn( "An exception occurred while trying to deliver a notification for user '{}' to node '{}' on service '{}'.", new Object[] { user, node, service, e } );

@@ -15,179 +15,167 @@
  */
 package org.igniterealtime.openfire.plugins.pushnotification;
 
-import org.dom4j.DocumentException;
 import org.dom4j.Element;
 import org.dom4j.io.SAXReader;
+import org.jivesoftware.database.DbConnectionManager;
 import org.jivesoftware.openfire.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xmpp.packet.JID;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
-import java.util.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class PushServiceManager
 {
     public static final Logger Log = LoggerFactory.getLogger( PushServiceManager.class );
 
-    public static final String USER_PROPERTY_KEY_PUSH_SERVICES = "push-notification push-services";
-    public static final String USER_PROPERTY_KEY_NODE_PREFIX = "push-notification node for service ";
-    public static final String USER_PROPERTY_KEY_OPTIONS_PREFIX = "push-notification publish options for node on service ";
-
-    public static void register( final User user, final JID pushService, final String node, final Element publishOptions )
+    public static void register( final User user, final JID pushService, final String node, final Element publishOptions ) throws SQLException
     {
-        final String propValue = user.getProperties().get( USER_PROPERTY_KEY_PUSH_SERVICES );
-        final Set<JID> services = toJIDSet( propValue );
-        services.add( pushService );
-        user.getProperties().put( USER_PROPERTY_KEY_PUSH_SERVICES, toCSV( services ) );
+        Log.debug( "Registering user '{}' to node '{}' of service '{}'.", new Object[] { user.getUsername(), node, pushService.toString() } );
 
-        final String propNodeValue = user.getProperties().get( USER_PROPERTY_KEY_NODE_PREFIX + pushService.toString() );
-        final Set<String> nodes = toSet( propNodeValue );
-        nodes.add( node );
-        user.getProperties().put( USER_PROPERTY_KEY_NODE_PREFIX + pushService.toString(), toCSV( nodes ) );
-
-        if ( publishOptions != null )
-        {
-            user.getProperties().put( USER_PROPERTY_KEY_OPTIONS_PREFIX + pushService.toString() + " " + node, publishOptions.asXML() );
-        }
-        Log.debug( "Registered node '{}' on service '{}' for user '{}'.", new Object[] { node, pushService.toString(), user.getUsername()} );
-    }
-
-    public static void deregister( final User user, final JID pushService, final String node )
-    {
-        final String propValue = user.getProperties().get( USER_PROPERTY_KEY_PUSH_SERVICES );
-        if ( propValue != null )
-        {
-            final Set<JID> services = toJIDSet( propValue );
-            services.remove( pushService );
-            if ( services.isEmpty() )
-            {
-                user.getProperties().remove( USER_PROPERTY_KEY_PUSH_SERVICES );
-            }
-            else
-            {
-                user.getProperties().put( USER_PROPERTY_KEY_PUSH_SERVICES, toCSV( services ) );
-            }
-        }
-
-        final Set<String> removedNodes = new HashSet<>();
-        if ( node == null )
-        {
-            // Remove all nodes for the service.
-            final String removed = user.getProperties().remove( USER_PROPERTY_KEY_NODE_PREFIX + pushService.toString() );
-            removedNodes.addAll( toSet( removed ) );
-        }
-        else
-        {
-            // Remove specific node for the service.
-            final String propNodeValue = user.getProperties().get( USER_PROPERTY_KEY_NODE_PREFIX + pushService.toString() );
-            if ( propNodeValue != null )
-            {
-                final Set<String> nodes = toSet( propNodeValue );
-                nodes.remove( node );
-                if ( nodes.isEmpty() )
-                {
-                    user.getProperties().remove( USER_PROPERTY_KEY_NODE_PREFIX + pushService.toString() );
-                }
-                else
-                {
-                    user.getProperties().put( USER_PROPERTY_KEY_NODE_PREFIX + pushService.toString(), toCSV( nodes ) );
-                }
-            }
-            removedNodes.add( node );
-        }
-
-        for ( final String removedNode : removedNodes )
-        {
-            user.getProperties().remove( USER_PROPERTY_KEY_OPTIONS_PREFIX + pushService.toString() + " " + removedNode );
-        }
-
-        Log.debug( "Deregistered {} from service '{}' for user '{}'.", new Object[] { (node == null ? "all nodes" : "node " + node), pushService.toString(), user.getUsername() } );
-    }
-
-    static Set<String> toSet( final String values )
-    {
-        final HashSet<String> result = new HashSet<>();
-        if ( values == null || values.isEmpty() ) {
-            return result;
-        }
-
-        final List<String> splittedValues = Arrays.asList( values.split( "\\s*,\\s*") );
-        result.addAll( splittedValues );
-        return result;
-    }
-
-    static Set<JID> toJIDSet( final String values )
-    {
-        final Set<JID> result = new HashSet<>();
-        for ( final String value : toSet( values ) )
-        {
-            try
-            {
-                result.add( new JID( value ) );
-            }
-            catch ( Exception e )
-            {
-                Log.warn( "Unable to parse '{}' as a JID!", value, e );
-            }
-        }
-        return result;
-    }
-
-    static String toCSV( final Collection<?> values )
-    {
-        final StringBuilder sb = new StringBuilder();
-        final Iterator<?> iter = values.iterator();
-        while ( iter.hasNext() ) {
-            sb.append( iter.next().toString() );
-            if ( iter.hasNext() ) {
-                sb.append(',');
-            }
-        }
-        return sb.toString();
-    }
-
-    public static Map<JID,Set<String>> getServiceNodes( final User user )
-    {
-        final Map<JID, Set<String>> result = new HashMap<>();
-        final String propValue = user.getProperties().get( USER_PROPERTY_KEY_PUSH_SERVICES );
-        if ( propValue != null )
-        {
-            final Set<JID> services = toJIDSet( propValue );
-
-            for ( final JID pushService : services )
-            {
-                final String propNodeValue = user.getProperties().get( USER_PROPERTY_KEY_NODE_PREFIX + pushService.toString() );
-                if ( propNodeValue != null )
-                {
-                    final Set<String> nodes = toSet( propNodeValue );
-                    result.put( pushService, nodes );
-                }
-            }
-        }
-        Log.trace( "User '{}' has {} push notification services configured.", user, result.size());
-        return result;
-    }
-
-    public static Element getPublishOptions( final User user, final JID pushService, final String node )
-    {
-        final String result = user.getProperties().get( USER_PROPERTY_KEY_OPTIONS_PREFIX + pushService.toString() + " " + node );
-        if ( result == null || result.isEmpty() ) {
-            return null;
-        }
-
+        Connection connection = null;
+        PreparedStatement pstmt = null;
         try
         {
-            final Element rootElement = new SAXReader().read( new StringReader( result ) ).getRootElement();
-            rootElement.detach();
-            return rootElement;
+            connection = DbConnectionManager.getConnection();
+            pstmt = connection.prepareStatement( "INSERT INTO ofPushNotiService (username, service, node, options) VALUES(?,?,?,?) " );
+            pstmt.setString( 1, user.getUsername() );
+            pstmt.setString( 2, pushService.toString() );
+            pstmt.setString( 3, node );
+            pstmt.setString( 4, publishOptions == null ? null : publishOptions.asXML() );
+            pstmt.execute();
         }
-        catch ( DocumentException e )
+        finally
         {
-            Log.error( "Unable to parse stored publish options for user {}, service {}, node {} into an XML structure.", new Object[] { user, pushService, node, e } );
-            return null;
+            DbConnectionManager.closeConnection( null, pstmt, connection );
         }
+    }
+
+    public static void deregister( final User user ) throws SQLException
+    {
+        if ( user == null ) {
+            throw new IllegalArgumentException( "Argument 'user' cannot be null." );
+        }
+
+        Log.debug( "Deregistered user '{}' from all services.", user.getUsername() );
+
+        Connection connection = null;
+        PreparedStatement pstmt = null;
+        try
+        {
+            connection = DbConnectionManager.getConnection();
+            pstmt = connection.prepareStatement( "DELETE FROM ofPushNotiService WHERE username = ?" );
+            pstmt.setString( 1, user.getUsername() );
+            pstmt.execute();
+        }
+        finally
+        {
+            DbConnectionManager.closeConnection( null, pstmt, connection );
+        }
+    }
+
+    public static void deregister( final User user, final JID pushService ) throws SQLException
+    {
+        if ( pushService == null )
+        {
+            deregister( user );
+            return;
+        }
+
+        Log.debug( "Deregistered user '{}' from all nodes of service '{}'.", user.getUsername(), pushService.toString() );
+
+        Connection connection = null;
+        PreparedStatement pstmt = null;
+        try
+        {
+            connection = DbConnectionManager.getConnection();
+            pstmt = connection.prepareStatement( "DELETE FROM ofPushNotiService WHERE username = ? AND service = ?" );
+            pstmt.setString( 1, user.getUsername() );
+            pstmt.setString( 2, pushService.toString() );
+            pstmt.execute();
+        }
+        finally
+        {
+            DbConnectionManager.closeConnection( null, pstmt, connection );
+        }
+    }
+
+    public static void deregister( final User user, final JID pushService, final String node ) throws SQLException
+    {
+        if ( node == null )
+        {
+            deregister( user, pushService );
+            return;
+        }
+
+        Log.debug( "Deregistering user '{}' from node '{}' of service '{}'.", new Object[] { user.getUsername(), node, pushService.toString() } );
+
+        Connection connection = null;
+        PreparedStatement pstmt = null;
+        try
+        {
+            connection = DbConnectionManager.getConnection();
+            pstmt = connection.prepareStatement( "DELETE FROM ofPushNotiService WHERE username = ? AND service = ? AND node = ?" );
+            pstmt.setString( 1, user.getUsername() );
+            pstmt.setString( 2, pushService.toString() );
+            pstmt.setString( 3, node );
+            pstmt.execute();
+        }
+        finally
+        {
+            DbConnectionManager.closeConnection( null, pstmt, connection );
+        }
+    }
+
+    public static Map<JID,Map<String, Element>> getServiceNodes( final User user ) throws SQLException
+    {
+        final Map<JID, Map<String, Element>> result = new HashMap<>();
+
+        Connection connection = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        try
+        {
+            connection = DbConnectionManager.getConnection();
+            pstmt = connection.prepareStatement( "SELECT service, node, options FROM ofPushNotiService WHERE username = ?" );
+            pstmt.setString( 1, user.getUsername() );
+            rs = pstmt.executeQuery();
+            while ( rs.next() )
+            {
+                try
+                {
+                    final String service = rs.getString( "service" );
+                    final String node = rs.getString( "node" );
+                    final String options = rs.getString( "options" );
+
+                    final JID serviceJID = new JID( service );
+                    final Map<String, Element> serviceConfig = result.getOrDefault( serviceJID, new HashMap<>() );
+
+                    final Element optionsElement = new SAXReader().read( new StringReader( options ) ).getRootElement();
+                    optionsElement.detach();
+
+
+                    serviceConfig.put( node, optionsElement );
+                    result.put( serviceJID, serviceConfig );
+                }
+                catch ( Exception e )
+                {
+                    Log.warn( "Unable to process database row content while obtaining push service configuration for user '{}'.", user.toString(), e );
+                }
+            }
+        }
+        finally
+        {
+            DbConnectionManager.closeConnection( rs, pstmt, connection );
+        }
+
+        Log.trace( "User '{}' has {} push notification services configured.", user, result.size());
+        return result;
     }
 }
