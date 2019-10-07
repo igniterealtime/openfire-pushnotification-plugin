@@ -17,6 +17,7 @@ package org.igniterealtime.openfire.plugins.pushnotification;
 
 import org.dom4j.Element;
 import org.dom4j.QName;
+import org.dom4j.util.NodeComparator;
 import org.jivesoftware.openfire.IQHandlerInfo;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.auth.UnauthorizedException;
@@ -30,6 +31,8 @@ import org.xmpp.packet.JID;
 import org.xmpp.packet.PacketError;
 
 import java.sql.SQLException;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * An IQ handler implementation for the protocol defined by namespace "urn:xmpp:push:0"
@@ -127,8 +130,19 @@ public class Push0IQHandler extends IQHandler
                 final Element publishOptions = parsePublishOptions( packet );
                 try
                 {
-                    PushServiceManager.register( user, pushService, node, publishOptions );
-                    Log.debug( "Registered push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername() } );
+                    // Clients can re-enable the same configuration. Ensure that database content is not duplicated.
+                    final Map<JID, Map<String, Element>> serviceNodes = PushServiceManager.getServiceNodes( user );
+                    final Element old = serviceNodes.getOrDefault( pushService, Collections.emptyMap() ).get( node );
+                    if ( (publishOptions == null && old == null)
+                        || ( publishOptions != null && old != null && new NodeComparator().compare( publishOptions, old ) == 0 ) )
+                    {
+                        Log.debug( "Push service '{}', node '{}', for user '{}' was already registered.", new Object[]{ pushService.toString(), node, user.getUsername() } );
+                    }
+                    else
+                    {
+                        PushServiceManager.register( user, pushService, node, publishOptions );
+                        Log.debug( "Registered push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername() } );
+                    }
                     response = IQ.createResultIQ( packet );
                 }
                 catch ( SQLException e )
