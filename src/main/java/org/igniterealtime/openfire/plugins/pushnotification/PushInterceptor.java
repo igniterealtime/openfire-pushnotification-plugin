@@ -35,6 +35,12 @@ import org.xmpp.packet.Packet;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.Set;
+import javax.xml.bind.DatatypeConverter;
+
+import com.google.gson.Gson;
+import org.apache.http.HttpResponse;
+import nl.martijndwars.webpush.*;
+
 
 public class PushInterceptor implements PacketInterceptor, OfflineMessageListener
 {
@@ -97,17 +103,22 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
             return;
         }
 
-        Log.trace( "If user '{}' has push services configured, pushes need to be sent for a message that just arrived.", user );
-        tryPushNotification( user );
+        Log.debug( "If user '{}' has push services configured, pushes need to be sent for a message that just arrived.", user );
+        tryPushNotification( user, body, packet.getFrom(), ((Message) packet).getType() );
     }
 
-    private void tryPushNotification( User user )
+    private void tryPushNotification( User user, String body, JID jid, Message.Type msgtype )
     {
+        if (XMPPServer.getInstance().getPresenceManager().isAvailable( user ))
+        {
+            return; // dont notify if user is online and available. let client handle that
+        }
+
         final Map<JID, Map<String, Element>> serviceNodes;
         try
         {
             serviceNodes = PushServiceManager.getServiceNodes( user );
-            Log.trace( "For user '{}', {} push service(s) are configured.", user.toString(), serviceNodes.size() );
+            Log.debug( "For user '{}', {} push service(s) are configured.", user.toString(), serviceNodes.size() );
         }
         catch ( Exception e )
         {
@@ -118,18 +129,29 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
         for ( final Map.Entry<JID, Map<String, Element>> serviceNode : serviceNodes.entrySet() )
         {
             final JID service = serviceNode.getKey();
-            Log.trace( "For user '{}', found service '{}'", user.toString(), service );
+            final String domain = XMPPServer.getInstance().getServerInfo().getXMPPDomain();
+
+            Log.debug( "For user '{}', found service '{}'", user.toString(), service );
 
             final Map<String, Element> nodes = serviceNode.getValue();
+
             for ( final Map.Entry<String, Element> nodeConfig : nodes.entrySet() )
             {
                 final String node = nodeConfig.getKey();
                 final Element publishOptions = nodeConfig.getValue();
 
-                Log.trace( "For user '{}', found node '{}' of service '{}'", new Object[] { user.toString(), node, service });
+                if (service.getDomain().equals(domain))
+                {
+                    // when app service domain matches xmmp domain, handle here and assume web push
+
+                    webPush(user, publishOptions, body, jid, msgtype);
+                    continue;
+                }
+
+                Log.debug( "For user '{}', found node '{}' of service '{}'", new Object[] { user.toString(), node, service });
                 final IQ push = new IQ( IQ.Type.set );
                 push.setTo( service );
-                push.setFrom( XMPPServer.getInstance().getServerInfo().getXMPPDomain() );
+                push.setFrom( domain );
                 push.setChildElement( "pubsub", "http://jabber.org/protocol/pubsub" );
                 final Element publish = push.getChildElement().addElement( "publish" );
                 publish.addAttribute( "node", node );
@@ -138,13 +160,13 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
 
                 if ( publishOptions != null )
                 {
-                    Log.trace( "For user '{}', found publish options for node '{}' of service '{}'", new Object[] { user.toString(), node, service });
+                    Log.debug( "For user '{}', found publish options for node '{}' of service '{}'", new Object[] { user.toString(), node, service });
                     final Element pubOptEl = push.getChildElement().addElement( "publish-options" );
                     pubOptEl.add( publishOptions );
                 }
                 try
                 {
-                    Log.trace( "For user '{}', Routing push notification to '{}'", user.toString(), push.getTo() );
+                    Log.debug( "For user '{}', Routing push notification to '{}'", user.toString(), push.getTo() );
                     XMPPServer.getInstance().getRoutingTable().routePacket( push.getTo(), push, true );
                 } catch ( Exception e ) {
                     Log.warn( "An exception occurred while trying to deliver a notification for user '{}' to node '{}' on service '{}'.", new Object[] { user, node, service, e } );
@@ -178,16 +200,57 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
             return;
         }
 
-        Log.trace( "Message stored to offline storage. Try to send push notification." );
+        Log.debug( "Message stored to offline storage. Try to send push notification." );
         final User user;
         try
         {
             user = XMPPServer.getInstance().getUserManager().getUser( message.getTo().getNode() );
-            tryPushNotification( user );
+            tryPushNotification( user, message.getBody(), message.getFrom(), message.getType() );
         }
         catch ( UserNotFoundException e )
         {
             Log.error( "Unable to find local user '{}'.", message.getTo().getNode(), e );
+        }
+    }
+    /**
+     * Push a payload to a subscribed web push user
+     *
+     *
+     * @param user being pushed to.
+     * @param publishOptions web push data stored.
+     * @param body web push payload.
+     */
+    private void webPush( final User user, final Element publishOptions, final String body, JID jid, Message.Type msgtype )
+    {
+        try {
+            for (final Element element : publishOptions.elements( "field" ) )
+            {
+                if ( "secret".equals( element.attributeValue( "var" ) ) )
+                {
+                    final Element value = element.element( "value" );
+                    final byte[] decodedBytes = DatatypeConverter.parseBase64Binary(value.getText());
+
+                    Secret secret = new Gson().fromJson(new String(decodedBytes), Secret.class);
+
+                    Log.debug( "For user '{}', Web push notification keys \npublic - " +  secret.publicKey + "\nprivate - " + secret.privateKey + "\nsubscription - " + secret.subscription.endpoint);
+
+                    PushService pushService = new PushService()
+                        .setPublicKey(secret.publicKey)
+                        .setPrivateKey(secret.privateKey)
+                        .setSubject("xmpp:admin@" + XMPPServer.getInstance().getServerInfo().getXMPPDomain());
+
+                    Stanza stanza = new Stanza(msgtype == Message.Type.chat ? "chat" : "groupchat", jid.asBareJID().toString(), body);
+                    Notification notification = new Notification(secret.subscription, (new Gson().toJson(stanza)).toString());
+                    HttpResponse response = pushService.send(notification);
+                    int statusCode = response.getStatusLine().getStatusCode();
+
+                    String payload = "";
+
+                    Log.debug( "For user '{}', Web push notification response '{}'", user.toString(), response.getStatusLine() );
+                }
+            }
+        } catch (Exception e) {
+            Log.warn( "An exception occurred while trying send a web push for user '{}'.", new Object[] { user, e } );
         }
     }
 }
