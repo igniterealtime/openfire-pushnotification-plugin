@@ -17,11 +17,13 @@ package org.igniterealtime.openfire.plugins.pushnotification;
 
 import org.dom4j.Element;
 import org.dom4j.QName;
+import org.dom4j.DocumentHelper;
 import org.dom4j.util.NodeComparator;
 import org.jivesoftware.openfire.IQHandlerInfo;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.auth.UnauthorizedException;
 import org.jivesoftware.openfire.handler.IQHandler;
+import org.jivesoftware.openfire.disco.*;
 import org.jivesoftware.openfire.user.User;
 import org.jivesoftware.openfire.user.UserNotFoundException;
 import org.slf4j.Logger;
@@ -29,10 +31,18 @@ import org.slf4j.LoggerFactory;
 import org.xmpp.packet.IQ;
 import org.xmpp.packet.JID;
 import org.xmpp.packet.PacketError;
+import org.xmpp.forms.DataForm;
 
 import java.sql.SQLException;
-import java.util.Collections;
-import java.util.Map;
+import java.util.*;
+import java.security.*;
+
+import com.google.common.io.BaseEncoding;
+import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.interfaces.ECPrivateKey;
+import org.bouncycastle.jce.interfaces.ECPublicKey;
+import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
+import nl.martijndwars.webpush.*;
 
 /**
  * An IQ handler implementation for the protocol defined by namespace "urn:xmpp:push:0"
@@ -41,7 +51,7 @@ import java.util.Map;
  * @author Guus der Kinderen, guus.der.kinderen@gmail.com
  * @see <a href="https://xmpp.org/extensions/xep-0357.html">XEP-0357: "Push Notifications"</a>
  */
-public class Push0IQHandler extends IQHandler
+public class Push0IQHandler extends IQHandler implements ServerFeaturesProvider, DiscoInfoProvider, DiscoItemsProvider
 {
     private static final Logger Log = LoggerFactory.getLogger( Push0IQHandler.class );
 
@@ -133,6 +143,7 @@ public class Push0IQHandler extends IQHandler
                     // Clients can re-enable the same configuration. Ensure that database content is not duplicated.
                     final Map<JID, Map<String, Element>> serviceNodes = PushServiceManager.getServiceNodes( user );
                     final Element old = serviceNodes.getOrDefault( pushService, Collections.emptyMap() ).get( node );
+
                     if ( (publishOptions == null && old == null)
                         || ( publishOptions != null && old != null && new NodeComparator().compare( publishOptions, old ) == 0 ) )
                     {
@@ -209,5 +220,92 @@ public class Push0IQHandler extends IQHandler
     public IQHandlerInfo getInfo()
     {
         return new IQHandlerInfo( ELEMENT_NAME, ELEMENT_NAMESPACE );
+    }
+
+    @Override
+    public Iterator<Element> getIdentities(String name, String node, JID senderJID) {
+        Element identity = DocumentHelper.createElement("identity");
+        identity.addAttribute("category", "pubsub");
+        identity.addAttribute("type", "push");
+        return Collections.singleton(identity).iterator();
+    }
+
+    @Override
+    public Iterator<String> getFeatures()
+    {
+        return Collections.singleton( ELEMENT_NAMESPACE ).iterator();
+    }
+
+    @Override
+    public Iterator<String> getFeatures(String name, String node, JID senderJID) {
+        return Arrays.asList(ELEMENT_NAMESPACE, "jabber:x:data").iterator();
+    }
+    @Override
+    public DataForm getExtendedInfo(String name, String node, JID senderJID) {
+        return null;
+    }
+
+    @Override
+    public boolean hasInfo(String name, String node, JID senderJID) {
+        return true;
+    }
+    @Override
+    public Iterator<DiscoItem> getItems(String name, String node, JID senderJID) {
+        List<DiscoItem> answer = new ArrayList<>();
+
+        if (!ELEMENT_NAMESPACE.equals(node)) {
+            answer = Collections.emptyList();
+        }
+        else {
+            final User user;
+            try
+            {
+                user = XMPPServer.getInstance().getUserManager().getUser( senderJID.getNode() );
+                String publicKey = user.getProperties().get("vapid.public.key");
+                String privateKey = user.getProperties().get("vapid.private.key");
+
+                if (publicKey == null || privateKey == null)
+                {
+                    try {
+                        KeyPair keyPair = generateKeyPair();
+                        publicKey = BaseEncoding.base64Url().encode(Utils.savePublicKey((ECPublicKey) keyPair.getPublic()));
+                        privateKey = BaseEncoding.base64Url().encode(Utils.savePrivateKey((ECPrivateKey) keyPair.getPrivate()));
+
+                        user.getProperties().put("vapid.public.key", publicKey);
+                        user.getProperties().put("vapid.private.key", privateKey);
+
+                    } catch (Exception e) {
+                        Log.warn( "An exception occurred while trying create vapid public & private keys for user '{}'.", new Object[] { user, e } );
+                        return answer.iterator();
+                    }
+                }
+
+                answer.add(new DiscoItem(senderJID.asBareJID(), "vapid.public.key", publicKey, null));
+                answer.add(new DiscoItem(senderJID.asBareJID(), "vapid.private.key", privateKey, null));
+
+            }
+            catch ( UserNotFoundException e )
+            {
+                Log.debug( "Not a recognized user.", e );
+            }
+        }
+        return answer.iterator();
+    }
+
+    /**
+     * Generate an EC keypair on the prime256v1 curve.
+     *
+     * @return
+     * @throws InvalidAlgorithmParameterException
+     * @throws NoSuchProviderException
+     * @throws NoSuchAlgorithmException
+     */
+    private KeyPair generateKeyPair() throws InvalidAlgorithmParameterException, NoSuchProviderException, NoSuchAlgorithmException {
+        ECNamedCurveParameterSpec parameterSpec = ECNamedCurveTable.getParameterSpec("prime256v1");
+
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("ECDH", "BC");
+        keyPairGenerator.initialize(parameterSpec);
+
+        return keyPairGenerator.generateKeyPair();
     }
 }
