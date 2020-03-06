@@ -86,14 +86,20 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
             return;
         }
 
+        if (((ClientSession) session).isAnonymousUser()) {
+            return;
+        }
+
         final User user;
+        String username = null;
         try
         {
-            user = XMPPServer.getInstance().getUserManager().getUser( ((ClientSession) session).getUsername() );
+            username = ((ClientSession) session).getUsername();
+            user = XMPPServer.getInstance().getUserManager().getUser( username );
         }
         catch ( UserNotFoundException e )
         {
-            Log.debug( "Not a recognized user.", e );
+            Log.debug( "Not a recognized user: " + username, e );
             return;
         }
 
