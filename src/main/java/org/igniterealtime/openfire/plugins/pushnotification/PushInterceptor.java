@@ -26,6 +26,8 @@ import org.jivesoftware.openfire.session.Session;
 import org.jivesoftware.openfire.user.User;
 import org.jivesoftware.openfire.user.UserNotFoundException;
 import org.jivesoftware.util.JiveGlobals;
+import org.jivesoftware.util.cache.Cache;
+import org.jivesoftware.util.cache.CacheFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xmpp.forms.DataForm;
@@ -35,11 +37,22 @@ import org.xmpp.packet.JID;
 import org.xmpp.packet.Message;
 import org.xmpp.packet.Packet;
 
+import java.io.Serializable;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 public class PushInterceptor implements PacketInterceptor, OfflineMessageListener
 {
     private static final Logger Log = LoggerFactory.getLogger( PushInterceptor.class );
+
+    /**
+     * An memory-only cache that keeps track of the last few notification that have been generated per user.
+     */
+    private static Cache<String, HashSet<SentNotification>> LAST_NOTIFICATIONS = CacheFactory.createCache( "pushnotification.last" );
 
     /**
      * Invokes the interceptor on the specified packet. The interceptor can either modify
@@ -115,6 +128,9 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
         {
             serviceNodes = PushServiceManager.getServiceNodes( user );
             Log.trace( "For user '{}', {} push service(s) are configured.", user.toString(), serviceNodes.size() );
+            if (serviceNodes.isEmpty()) {
+                return;
+            }
         }
         catch ( Exception e )
         {
@@ -122,6 +138,23 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
             return;
         }
 
+        // Basic throttling.
+        synchronized ( user )
+        {
+            if ( wasPushAttemptedFor( user, message, Duration.ofMinutes(5)) ) {
+                Log.debug( "For user '{}', not re-attempting push for this message that already had a push attempt recently.", user.toString() );
+                return;
+            }
+
+            if ( attemptsForLast(user, Duration.ofSeconds(1)) > JiveGlobals.getIntProperty( "pushnotifications.max-per-second", 5 ) ) {
+                Log.debug( "For user '{}', skipping push, as user is over the rate limit of 5 push attempts per second.", user.toString() );
+                return;
+            }
+
+            addAttemptFor( user, message );
+        }
+
+        // Perform the pushes
         for ( final Map.Entry<JID, Map<String, Element>> serviceNode : serviceNodes.entrySet() )
         {
             final JID service = serviceNode.getKey();
@@ -181,6 +214,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
             }
         }
     }
+
     /**
      * Notification message indicating that a message was not stored offline but bounced
      * back to the sender.
@@ -215,6 +249,99 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
         catch ( UserNotFoundException e )
         {
             Log.error( "Unable to find local user '{}'.", message.getTo().getNode(), e );
+        }
+    }
+
+    public boolean wasPushAttemptedFor( final User user, final Message message, final Duration duration )
+    {
+        final Set<SentNotification> sentNotifications = LAST_NOTIFICATIONS.get(user.getUsername());
+        if ( sentNotifications == null || sentNotifications.isEmpty() ) {
+            return false;
+        }
+
+        // Cleanup of older attempts.
+        sentNotifications.removeIf( n -> n.attempt.isBefore(Instant.now().minus(duration.multipliedBy(2))));
+
+        final boolean result = sentNotifications.stream().anyMatch( n ->
+                n != null
+                    && n.messageIdentifier.equals(getMessageIdentifier(message ) )
+                    && n.attempt.isAfter(Instant.now().minus(duration))
+        );
+        return result;
+    }
+
+    public long attemptsForLast( final User user, final Duration duration ) {
+        final Set<SentNotification> sentNotifications = LAST_NOTIFICATIONS.get(user.getUsername());
+        if ( sentNotifications == null || sentNotifications.isEmpty() ) {
+            return 0;
+        }
+
+        return sentNotifications.stream().filter(
+            n -> n.attempt.isAfter(Instant.now().minus(duration))
+        ).count();
+    }
+
+    public void addAttemptFor( final User user, final Message message )
+    {
+        HashSet<SentNotification> sentNotifications = LAST_NOTIFICATIONS.get(user.getUsername());
+        if ( sentNotifications == null ) {
+            sentNotifications = new HashSet<>();
+        }
+        sentNotifications.add( new SentNotification( Instant.now(), getMessageIdentifier( message ) ));
+        LAST_NOTIFICATIONS.put(user.getUsername(), sentNotifications);
+    }
+
+    public static String getMessageIdentifier( final Message message )
+    {
+        return message.getID() != null ? message.getID() : "" + message.getFrom().hashCode() + message.getBody().hashCode();
+    }
+
+    public static class SentNotification implements Serializable
+    {
+        private Instant attempt;
+        private String messageIdentifier;
+
+        public SentNotification() {} // For serialization.
+
+        public SentNotification( final Instant attempt, final String messageIdentifier ) {
+            this.attempt = attempt;
+            this.messageIdentifier = messageIdentifier;
+        }
+
+        public Instant getAttempt()
+        {
+            return attempt;
+        }
+
+        public void setAttempt( final Instant attempt )
+        {
+            this.attempt = attempt;
+        }
+
+        public String getMessageIdentifier()
+        {
+            return messageIdentifier;
+        }
+
+        public void setMessageIdentifier( final String messageIdentifier )
+        {
+            this.messageIdentifier = messageIdentifier;
+        }
+
+        @Override
+        public boolean equals( final Object o )
+        {
+            if ( this == o ) { return true; }
+            if ( o == null || getClass() != o.getClass() ) { return false; }
+            final SentNotification that = (SentNotification) o;
+            return Objects.equals(attempt, that.attempt) &&
+                Objects.equals(messageIdentifier, that.messageIdentifier);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(attempt, messageIdentifier);
         }
     }
 }

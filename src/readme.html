@@ -68,6 +68,7 @@ Push Notification Plugin Readme
     The plugin can be configured using these Openfire system properties:
 </p>
 <ul>
+    <li><tt>pushnotifications.max-per-second</tt> (default <tt>5</tt>) - The maximum amount of messages per second that can generate push notifications (note that each message can generate a push notification through more than one registered service).</li>
     <li><tt>pushnotifications.summary.enable</tt> (default <tt>true</tt>) - Add a summary of the message for which the push notification is triggered. This helps some devices to wake up the XMPP client.</li>
     <li><tt>pushnotifications.summary.include-last-sender</tt> (default <tt>false</tt>) - Adds the sender of the message for which the push notification is sent to the summary (if enabled).</li>
     <li><tt>pushnotifications.summary.include-last-message-body</tt> (default <tt>false</tt>) - Adds the body of the message for which the push notification is sent to the summary (if enabled).</li>
