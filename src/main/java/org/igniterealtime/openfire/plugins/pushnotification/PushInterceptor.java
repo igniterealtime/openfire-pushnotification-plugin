@@ -25,16 +25,17 @@ import org.jivesoftware.openfire.session.ClientSession;
 import org.jivesoftware.openfire.session.Session;
 import org.jivesoftware.openfire.user.User;
 import org.jivesoftware.openfire.user.UserNotFoundException;
+import org.jivesoftware.util.JiveGlobals;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xmpp.forms.DataForm;
+import org.xmpp.forms.FormField;
 import org.xmpp.packet.IQ;
 import org.xmpp.packet.JID;
 import org.xmpp.packet.Message;
 import org.xmpp.packet.Packet;
 
-import java.sql.SQLException;
 import java.util.Map;
-import java.util.Set;
 
 public class PushInterceptor implements PacketInterceptor, OfflineMessageListener
 {
@@ -104,10 +105,10 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
         }
 
         Log.trace( "If user '{}' has push services configured, pushes need to be sent for a message that just arrived.", user );
-        tryPushNotification( user );
+        tryPushNotification( user, (Message) packet );
     }
 
-    private void tryPushNotification( User user )
+    private void tryPushNotification( User user, Message message )
     {
         final Map<JID, Map<String, Element>> serviceNodes;
         try
@@ -140,7 +141,27 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
                 final Element publish = push.getChildElement().addElement( "publish" );
                 publish.addAttribute( "node", node );
                 final Element item = publish.addElement( "item" );
-                item.addElement( QName.get( "notification", "urn:xmpp:push:0" ) );
+
+                final Element notification = item.addElement( QName.get( "notification", "urn:xmpp:push:0" ) );
+                if ( JiveGlobals.getBooleanProperty( "pushnotifications.summary.enable", true ) )
+                {
+                    final DataForm notificationForm = new DataForm(DataForm.Type.form);
+                    notificationForm.addField("FORM_TYPE", null, FormField.Type.hidden).addValue("urn:xmpp:push:summary");
+                    notificationForm.addField("message-count", null, FormField.Type.text_single).addValue(1);
+                    final FormField lastSenderField = notificationForm.addField("last-message-sender", null, FormField.Type.text_single);
+                    if ( JiveGlobals.getBooleanProperty( "pushnotifications.summary.include-last-sender", false ) ) {
+                        lastSenderField.addValue( message.getFrom() );
+                    }
+                    final FormField lastMessageField = notificationForm.addField("last-message-body", null, FormField.Type.text_single);
+                    String includedBody = "New Message"; // For IOS to wake up, some kind of content is required.
+                    if ( JiveGlobals.getBooleanProperty( "pushnotifications.summary.include-last-message-body", false ) ) {
+                        if ( message.getBody() != null && !message.getBody().trim().isEmpty() ) {
+                            includedBody = message.getBody().trim();
+                        }
+                    }
+                    lastMessageField.addValue( includedBody );
+                    notification.add(notificationForm.getElement());
+                }
 
                 if ( publishOptions != null )
                 {
@@ -189,7 +210,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
         try
         {
             user = XMPPServer.getInstance().getUserManager().getUser( message.getTo().getNode() );
-            tryPushNotification( user );
+            tryPushNotification( user, message );
         }
         catch ( UserNotFoundException e )
         {
