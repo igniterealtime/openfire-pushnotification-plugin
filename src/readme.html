@@ -62,6 +62,19 @@ Push Notification Plugin Readme
     copy the new pushnotification.jar file over the existing file.
 </p>
 
+<h2>Configuration</h2>
+
+<p>
+    The plugin can be configured using these Openfire system properties:
+</p>
+<ul>
+    <li><tt>pushnotifications.summary.enable</tt> (default <tt>true</tt>) - Add a summary of the message for which the push notification is triggered. This helps some devices to wake up the XMPP client.</li>
+    <li><tt>pushnotifications.summary.include-last-sender</tt> (default <tt>false</tt>) - Adds the sender of the message for which the push notification is sent to the summary (if enabled).</li>
+    <li><tt>pushnotifications.summary.include-last-message-body</tt> (default <tt>false</tt>) - Adds the body of the message for which the push notification is sent to the summary (if enabled).</li>
+</ul>
+<p>
+    Note that push notifications are processed by remote servers that are not part of Openfire. Out of privacy concerns, the inclusion of the author and body of the message for which the push notification is sent is switched off by default.
+</p>
 <h2>Attribution</h2>
 <p>
 <div>
