@@ -21,6 +21,7 @@ import org.dom4j.util.NodeComparator;
 import org.jivesoftware.openfire.IQHandlerInfo;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.auth.UnauthorizedException;
+import org.jivesoftware.openfire.disco.UserFeaturesProvider;
 import org.jivesoftware.openfire.handler.IQHandler;
 import org.jivesoftware.openfire.user.User;
 import org.jivesoftware.openfire.user.UserNotFoundException;
@@ -31,7 +32,9 @@ import org.xmpp.packet.JID;
 import org.xmpp.packet.PacketError;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -41,7 +44,7 @@ import java.util.Map;
  * @author Guus der Kinderen, guus.der.kinderen@gmail.com
  * @see <a href="https://xmpp.org/extensions/xep-0357.html">XEP-0357: "Push Notifications"</a>
  */
-public class Push0IQHandler extends IQHandler
+public class Push0IQHandler extends IQHandler implements UserFeaturesProvider
 {
     private static final Logger Log = LoggerFactory.getLogger( Push0IQHandler.class );
 
@@ -209,5 +212,13 @@ public class Push0IQHandler extends IQHandler
     public IQHandlerInfo getInfo()
     {
         return new IQHandlerInfo( ELEMENT_NAME, ELEMENT_NAMESPACE );
+    }
+
+    @Override
+    public Iterator<String> getFeatures()
+    {
+        final ArrayList<String> features = new ArrayList<>();
+        features.add( ELEMENT_NAMESPACE );
+        return features.iterator();
     }
 }
