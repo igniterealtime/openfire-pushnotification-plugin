@@ -19,6 +19,7 @@ import org.jivesoftware.openfire.OfflineMessageStrategy;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.container.Plugin;
 import org.jivesoftware.openfire.container.PluginManager;
+import org.jivesoftware.openfire.disco.UserFeaturesProvider;
 import org.jivesoftware.openfire.event.UserEventDispatcher;
 import org.jivesoftware.openfire.event.UserEventListener;
 import org.jivesoftware.openfire.handler.IQHandler;
@@ -67,7 +68,9 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
         InterceptorManager.getInstance().addInterceptor( interceptor );
         OfflineMessageStrategy.addListener( interceptor );
 
+        // The former is not spec-compliant, the latter is. Keeping the former for now for backwards compatibility.
         XMPPServer.getInstance().getIQDiscoInfoHandler().addServerFeature( Push0IQHandler.ELEMENT_NAMESPACE );
+        XMPPServer.getInstance().getIQDiscoInfoHandler().addUserFeaturesProvider( push0IQHandler );
 
         Log.debug( "Initialized." );
     }
@@ -94,6 +97,9 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
             final IQHandler registeredHandler = iterator.next();
             try
             {
+                if ( registeredHandler instanceof UserFeaturesProvider ) {
+                    XMPPServer.getInstance().getIQDiscoInfoHandler().removeUserFeaturesProvider( (UserFeaturesProvider) registeredHandler );
+                }
                 XMPPServer.getInstance().getIQRouter().removeHandler( registeredHandler );
             }
             catch ( Exception e )
