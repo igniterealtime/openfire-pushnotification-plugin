@@ -17,6 +17,7 @@ package org.igniterealtime.openfire.plugins.pushnotification;
 
 import org.jivesoftware.openfire.OfflineMessageStrategy;
 import org.jivesoftware.openfire.XMPPServer;
+import org.jivesoftware.openfire.cluster.ClusterManager;
 import org.jivesoftware.openfire.container.Plugin;
 import org.jivesoftware.openfire.container.PluginManager;
 import org.jivesoftware.openfire.disco.UserFeaturesProvider;
@@ -30,10 +31,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 
 /**
  * An Openfire plugin that adds push notification support, as defined in XEP-0357.
@@ -48,6 +49,18 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
     private final List<IQHandler> registeredHandlers = new ArrayList<>();
 
     private final PushInterceptor interceptor = new PushInterceptor();
+
+    private final Timer timer = new Timer();
+    private final TimerTask timerTask = new TimerTask() {
+        @Override
+        public void run() {
+            try {
+                interceptor.purgeAllOlderThan(Instant.now().minus(10, ChronoUnit.MINUTES));
+            } catch (Exception e) {
+                Log.warn( "An exception occurred while trying to purge old cache entries.", e);
+            }
+        }
+    };
 
     /**
      * Initializes the plugin.
@@ -72,6 +85,9 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
         XMPPServer.getInstance().getIQDiscoInfoHandler().addServerFeature( Push0IQHandler.ELEMENT_NAMESPACE );
         XMPPServer.getInstance().getIQDiscoInfoHandler().addUserFeaturesProvider( push0IQHandler );
 
+        if (ClusterManager.isSeniorClusterMember()) {
+            timer.schedule(timerTask, Duration.ofMinutes(2).toMillis(), Duration.ofMinutes(2).toMillis());
+        }
         Log.debug( "Initialized." );
     }
 
@@ -88,6 +104,9 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
     public synchronized void destroyPlugin()
     {
         Log.debug( "Destroying..." );
+
+        timerTask.cancel();
+        timer.cancel();
 
         XMPPServer.getInstance().getIQDiscoInfoHandler().removeServerFeature( Push0IQHandler.ELEMENT_NAMESPACE );
 
