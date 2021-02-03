@@ -135,9 +135,12 @@ public class Push0IQHandler extends IQHandler implements UserFeaturesProvider
                 {
                     // Clients can re-enable the same configuration. Ensure that database content is not duplicated.
                     final Map<JID, Map<String, Element>> serviceNodes = PushServiceManager.getServiceNodes( user );
-                    final Element old = serviceNodes.getOrDefault( pushService, Collections.emptyMap() ).get( node );
-                    if ( (publishOptions == null && old == null)
-                        || ( publishOptions != null && old != null && new NodeComparator().compare( publishOptions, old ) == 0 ) )
+                    final Map<String, Element> nodeOptions = serviceNodes.getOrDefault(pushService, Collections.emptyMap());
+                    final Element oldOptions = nodeOptions.get( node );
+                    if ( nodeOptions.containsKey( node ) && (
+                               ( publishOptions == null && oldOptions == null ) // both old and new options are null.
+                            || ( publishOptions != null && oldOptions != null && new NodeComparator().compare( publishOptions, oldOptions ) == 0 ) // old and new options are equal.
+                            ) )
                     {
                         Log.debug( "Push service '{}', node '{}', for user '{}' was already registered.", new Object[]{ pushService.toString(), node, user.getUsername() } );
                     }
