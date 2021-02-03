@@ -1,4 +1,5 @@
-[![Build Status](https://travis-ci.org/igniterealtime/openfire-pushnotification-plugin.svg?branch=master)](https://travis-ci.org/igniterealtime/openfire-pushnotification-plugin)
+
+[![Build Status](https://github.com/igniterealtime/openfire-pushnotification-plugin/workflows/Java%20CI/badge.svg)](https://github.com/igniterealtime/openfire-pushnotification-plugin/actions)
 
 The Push Notification Plugin is a plugin for the [Openfire XMPP server](https://www.igniterealtime.org/openfire), which adds support sending push notifications to client software, as described in [XEP-0357: "Push Notifications"](https://xmpp.org/extensions/xep-0357.html).
 
