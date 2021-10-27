@@ -17,6 +17,7 @@ package org.igniterealtime.openfire.plugins.pushnotification;
 
 import org.dom4j.Element;
 import org.dom4j.QName;
+import org.jivesoftware.openfire.OfflineMessage;
 import org.jivesoftware.openfire.OfflineMessageListener;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.interceptor.PacketInterceptor;
@@ -249,7 +250,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
      * @param message the message that was stored offline.
      */
     @Override
-    public void messageStored( final Message message )
+    public void messageStored( final OfflineMessage message )
     {
         if ( message.getBody() == null || message.getBody().isEmpty() )
         {

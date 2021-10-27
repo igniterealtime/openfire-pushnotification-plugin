@@ -9,8 +9,7 @@
     <author>Guus der Kinderen</author>
     <date>10/27/2021</date>
 
-    <minServerVersion>4.3.0</minServerVersion>
-    <priorToServerVersion>4.6.4</priorToServerVersion>
+    <minServerVersion>4.6.4</minServerVersion>
     <minJavaVersion>1.8</minJavaVersion>
 
     <databaseKey>pushnotification</databaseKey>
