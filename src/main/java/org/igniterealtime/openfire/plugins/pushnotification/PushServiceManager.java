@@ -157,8 +157,13 @@ public class PushServiceManager
                     final JID serviceJID = new JID( service );
                     final Map<String, Element> serviceConfig = result.getOrDefault( serviceJID, new HashMap<>() );
 
-                    final Element optionsElement = new SAXReader().read( new StringReader( options ) ).getRootElement();
-                    optionsElement.detach();
+                    final Element optionsElement;
+                    if (options != null) {
+                        optionsElement = new SAXReader().read(new StringReader(options)).getRootElement();
+                        optionsElement.detach();
+                    } else {
+                        optionsElement = null;
+                    }
 
 
                     serviceConfig.put( node, optionsElement );
