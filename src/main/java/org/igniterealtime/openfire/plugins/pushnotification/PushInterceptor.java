@@ -27,6 +27,7 @@ import org.jivesoftware.openfire.session.Session;
 import org.jivesoftware.openfire.user.User;
 import org.jivesoftware.openfire.user.UserNotFoundException;
 import org.jivesoftware.util.JiveGlobals;
+import org.jivesoftware.util.SystemProperty;
 import org.jivesoftware.util.cache.Cache;
 import org.jivesoftware.util.cache.CacheFactory;
 import org.slf4j.Logger;
@@ -46,6 +47,48 @@ import java.util.concurrent.locks.Lock;
 public class PushInterceptor implements PacketInterceptor, OfflineMessageListener
 {
     private static final Logger Log = LoggerFactory.getLogger( PushInterceptor.class );
+
+    /**
+     * The maximum amount of messages per second that can generate push notifications (note that each message can generate
+     * a push notification through more than one registered service).
+     */
+    public static final SystemProperty<Integer> MAX_PER_SECOND = SystemProperty.Builder.ofType(Integer.class)
+        .setKey("pushnotifications.max-per-second")
+        .setPlugin("Push Notification")
+        .setMinValue(0)
+        .setDefaultValue(5)
+        .setDynamic(true)
+        .build();
+
+    /**
+     * Add a summary of the message for which the push notification is triggered. This helps some devices to wake up the XMPP client.
+     */
+    public static final SystemProperty<Boolean> SUMMARY_ENABLE = SystemProperty.Builder.ofType(Boolean.class)
+        .setKey("pushnotifications.summary.enable")
+        .setPlugin("Push Notification")
+        .setDefaultValue(true)
+        .setDynamic(true)
+        .build();
+
+    /**
+     * Adds the sender of the message for which the push notification is sent to the summary (if enabled).
+     */
+    public static final SystemProperty<Boolean> SUMMARY_INCLUDE_LAST_SENDER = SystemProperty.Builder.ofType(Boolean.class)
+        .setKey("pushnotifications.summary.include-last-sender")
+        .setPlugin("Push Notification")
+        .setDefaultValue(false)
+        .setDynamic(true)
+        .build();
+
+    /**
+     * Adds the body of the message for which the push notification is sent to the summary (if enabled).
+     */
+    public static final SystemProperty<Boolean> SUMMARY_INCLUDE_LAST_MESSAGE_BODY = SystemProperty.Builder.ofType(Boolean.class)
+        .setKey("pushnotifications.summary.include-last-message-body")
+        .setPlugin("Push Notification")
+        .setDefaultValue(false)
+        .setDynamic(true)
+        .build();
 
     /**
      * An memory-only cache that keeps track of for which messages (by ID) push notifications have been generated for
@@ -162,7 +205,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
                 return;
             }
 
-            if ( attemptsForLast(user, Duration.ofSeconds(1)) > JiveGlobals.getIntProperty( "pushnotifications.max-per-second", 5 ) ) {
+            if ( attemptsForLast(user, Duration.ofSeconds(1)) > MAX_PER_SECOND.getValue() ) {
                 Log.debug( "For user '{}', skipping push, as user is over the rate limit of 5 push attempts per second.", user.toString() );
                 return;
             }
@@ -194,18 +237,18 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
                 final Element item = publish.addElement( "item" );
 
                 final Element notification = item.addElement( QName.get( "notification", "urn:xmpp:push:0" ) );
-                if ( JiveGlobals.getBooleanProperty( "pushnotifications.summary.enable", true ) )
+                if ( SUMMARY_ENABLE.getValue() )
                 {
                     final DataForm notificationForm = new DataForm(DataForm.Type.form);
                     notificationForm.addField("FORM_TYPE", null, FormField.Type.hidden).addValue("urn:xmpp:push:summary");
                     notificationForm.addField("message-count", null, FormField.Type.text_single).addValue(1);
                     final FormField lastSenderField = notificationForm.addField("last-message-sender", null, FormField.Type.text_single);
-                    if ( JiveGlobals.getBooleanProperty( "pushnotifications.summary.include-last-sender", false ) ) {
+                    if ( SUMMARY_INCLUDE_LAST_SENDER.getValue() ) {
                         lastSenderField.addValue( message.getFrom() );
                     }
                     final FormField lastMessageField = notificationForm.addField("last-message-body", null, FormField.Type.text_single);
                     String includedBody = "New Message"; // For IOS to wake up, some kind of content is required.
-                    if ( JiveGlobals.getBooleanProperty( "pushnotifications.summary.include-last-message-body", false ) ) {
+                    if ( SUMMARY_INCLUDE_LAST_MESSAGE_BODY.getValue() ) {
                         if ( message.getBody() != null && !message.getBody().trim().isEmpty() ) {
                             includedBody = message.getBody().trim();
                         }

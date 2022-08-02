@@ -15,4 +15,14 @@
     <databaseKey>pushnotification</databaseKey>
     <databaseVersion>1</databaseVersion>
 
+    <adminconsole>
+        <tab id="tab-server">
+            <sidebar id="sidebar-server-settings">
+                <item id="pushnotification-settings"
+                      url="pushnotification-settings.jsp"
+                      name="${sidebar.pushnotification}"
+                      description="${sidebar.pushnotification.descr}" />
+            </sidebar>
+        </tab>
+    </adminconsole>
 </plugin>
