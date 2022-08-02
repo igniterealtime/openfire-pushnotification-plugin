@@ -23,6 +23,11 @@
                 <!-- this generates the JAR files in the Openfire-plugin specific format -->
                 <artifactId>maven-assembly-plugin</artifactId>
             </plugin>
+            <plugin>
+                <!-- Compiles the Openfire Admin Console JSP pages. -->
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-jspc-maven-plugin</artifactId>
+            </plugin>
         </plugins>
     </build>
 
