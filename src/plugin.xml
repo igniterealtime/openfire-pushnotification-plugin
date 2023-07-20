@@ -7,7 +7,7 @@
     <version>${project.version}</version>
 
     <author>Guus der Kinderen</author>
-    <date>2022-07-06</date>
+    <date>2023-07-20</date>
 
     <minServerVersion>4.6.4</minServerVersion>
     <minJavaVersion>1.8</minJavaVersion>
