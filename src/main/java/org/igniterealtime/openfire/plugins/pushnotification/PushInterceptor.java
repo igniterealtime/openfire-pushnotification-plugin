@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Ignite Realtime Foundation. All rights reserved.
+ * Copyright (C) 2019-2023 Ignite Realtime Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import org.jivesoftware.openfire.session.ClientSession;
 import org.jivesoftware.openfire.session.Session;
 import org.jivesoftware.openfire.user.User;
 import org.jivesoftware.openfire.user.UserNotFoundException;
-import org.jivesoftware.util.JiveGlobals;
 import org.jivesoftware.util.SystemProperty;
 import org.jivesoftware.util.cache.Cache;
 import org.jivesoftware.util.cache.CacheFactory;
@@ -197,7 +196,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
         }
 
         // Basic throttling.
-        final Lock lock = CacheFactory.getLock(user.getUsername(), MESSAGES_BY_USER);
+        final Lock lock = MESSAGES_BY_USER.getLock(user.getUsername());
         lock.lock();
         try {
             if ( wasPushAttemptedFor( user, message, Duration.ofMinutes(5)) ) {
@@ -326,7 +325,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
     {
         final String identifier = getMessageIdentifier(user, message);
 
-        final Lock lock = CacheFactory.getLock(user.getUsername(), MESSAGES_BY_USER);
+        final Lock lock = MESSAGES_BY_USER.getLock(user.getUsername());
         lock.lock();
         try {
             /* This can be short-circuited, as the same identifier is used in the secondary cache.
@@ -359,7 +358,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
      */
     public long attemptsForLast( final User user, final Duration duration )
     {
-        final Lock lock = CacheFactory.getLock(user.getUsername(), MESSAGES_BY_USER);
+        final Lock lock = MESSAGES_BY_USER.getLock(user.getUsername());
         lock.lock();
         try {
             final HashSet<String> messageIdentifiers = MESSAGES_BY_USER.get(user.getUsername());
@@ -390,7 +389,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
     {
         final String identifier = getMessageIdentifier(user, message);
 
-        final Lock lock = CacheFactory.getLock(user.getUsername(), MESSAGES_BY_USER);
+        final Lock lock = MESSAGES_BY_USER.getLock(user.getUsername());
         lock.lock();
         try {
             HashSet<String> messageIdentifiers = MESSAGES_BY_USER.get(user.getUsername());
@@ -426,7 +425,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
         // Iterate over all message identifiers for each user, to be able to apply the required user-specific lock.
         for ( final String username : userNames )
         {
-            final Lock lock = CacheFactory.getLock(username, MESSAGES_BY_USER);
+            final Lock lock = MESSAGES_BY_USER.getLock(username);
             lock.lock();
             try
             {
