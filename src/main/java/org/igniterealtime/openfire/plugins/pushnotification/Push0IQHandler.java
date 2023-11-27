@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Ignite Realtime Foundation. All rights reserved.
+ * Copyright (C) 2019-2023 Ignite Realtime Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,7 +105,7 @@ public class Push0IQHandler extends IQHandler implements UserFeaturesProvider
             return result;
         }
 
-        if ( !XMPPServer.getInstance().getUserManager().isRegisteredUser( packet.getFrom() ) )
+        if ( !XMPPServer.getInstance().getUserManager().isRegisteredUser( packet.getFrom(), false ) )
         {
             Log.info( "Denying service for an entity that's not recognized as a registered user: {}", packet.getFrom() );
             throw new UnauthorizedException( "This service is only available to registered, local users." );
