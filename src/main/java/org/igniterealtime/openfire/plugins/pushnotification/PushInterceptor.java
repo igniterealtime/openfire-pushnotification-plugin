@@ -265,7 +265,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
                 try
                 {
                     Log.trace( "For user '{}', Routing push notification to '{}'", user.toString(), push.getTo() );
-                    XMPPServer.getInstance().getRoutingTable().routePacket( push.getTo(), push, true );
+                    XMPPServer.getInstance().getRoutingTable().routePacket( push.getTo(), push );
                 } catch ( Exception e ) {
                     Log.warn( "An exception occurred while trying to deliver a notification for user '{}' to node '{}' on service '{}'.", new Object[] { user, node, service, e } );
                 }
