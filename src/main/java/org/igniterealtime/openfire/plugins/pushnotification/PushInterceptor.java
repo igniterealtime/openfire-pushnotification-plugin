@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Ignite Realtime Foundation. All rights reserved.
+ * Copyright (C) 2019-2025 Ignite Realtime Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package org.igniterealtime.openfire.plugins.pushnotification;
 
 import org.dom4j.Element;
 import org.dom4j.QName;
+import org.igniterealtime.openfire.plugins.pushnotification.streammanagement.TerminationDelegateManager;
 import org.jivesoftware.openfire.OfflineMessage;
 import org.jivesoftware.openfire.OfflineMessageListener;
 import org.jivesoftware.openfire.XMPPServer;
@@ -266,6 +267,7 @@ public class PushInterceptor implements PacketInterceptor, OfflineMessageListene
                 {
                     Log.trace( "For user '{}', Routing push notification to '{}'", user.toString(), push.getTo() );
                     XMPPServer.getInstance().getRoutingTable().routePacket( push.getTo(), push );
+                    TerminationDelegateManager.registerPushNotificationFor(user);
                 } catch ( Exception e ) {
                     Log.warn( "An exception occurred while trying to deliver a notification for user '{}' to node '{}' on service '{}'.", new Object[] { user, node, service, e } );
                 }

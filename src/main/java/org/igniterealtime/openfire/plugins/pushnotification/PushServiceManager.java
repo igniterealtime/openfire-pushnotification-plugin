@@ -183,4 +183,9 @@ public class PushServiceManager
         Log.trace( "User '{}' has {} push notification services configured.", user, result.size());
         return result;
     }
+
+    public static boolean hasServiceNodes( final User user ) throws SQLException
+    {
+        return !getServiceNodes(user).isEmpty();
+    }
 }

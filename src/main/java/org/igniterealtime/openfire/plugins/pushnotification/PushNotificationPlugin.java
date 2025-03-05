@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Ignite Realtime Foundation. All rights reserved.
+ * Copyright (C) 2019-2025 Ignite Realtime Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,15 @@
  */
 package org.igniterealtime.openfire.plugins.pushnotification;
 
+import org.igniterealtime.openfire.plugins.pushnotification.streammanagement.TerminationDelegateManager;
 import org.jivesoftware.openfire.OfflineMessageStrategy;
+import org.jivesoftware.openfire.SessionManager;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.cluster.ClusterManager;
 import org.jivesoftware.openfire.container.Plugin;
 import org.jivesoftware.openfire.container.PluginManager;
 import org.jivesoftware.openfire.disco.UserFeaturesProvider;
+import org.jivesoftware.openfire.event.SessionEventDispatcher;
 import org.jivesoftware.openfire.event.UserEventDispatcher;
 import org.jivesoftware.openfire.event.UserEventListener;
 import org.jivesoftware.openfire.handler.IQHandler;
@@ -48,14 +51,16 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
 
     private final List<IQHandler> registeredHandlers = new ArrayList<>();
 
-    private final PushInterceptor interceptor = new PushInterceptor();
+    private final PushInterceptor pushInterceptor = new PushInterceptor();
+
+    private final TerminationDelegateManager terminationDelegateManager = new TerminationDelegateManager();
 
     private final Timer timer = new Timer();
     private final TimerTask timerTask = new TimerTask() {
         @Override
         public void run() {
             try {
-                interceptor.purgeAllOlderThan(Instant.now().minus(10, ChronoUnit.MINUTES));
+                pushInterceptor.purgeAllOlderThan(Instant.now().minus(10, ChronoUnit.MINUTES));
             } catch (Exception e) {
                 Log.warn( "An exception occurred while trying to purge old cache entries.", e);
             }
@@ -78,12 +83,16 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
         registeredHandlers.add( push0IQHandler );
 
         UserEventDispatcher.addListener( this );
-        InterceptorManager.getInstance().addInterceptor( interceptor );
-        OfflineMessageStrategy.addListener( interceptor );
+        InterceptorManager.getInstance().addInterceptor(pushInterceptor);
+        InterceptorManager.getInstance().addInterceptor(terminationDelegateManager);
+        SessionEventDispatcher.addListener(terminationDelegateManager);
+        OfflineMessageStrategy.addListener(pushInterceptor);
 
         // The former is not spec-compliant, the latter is. Keeping the former for now for backwards compatibility.
         XMPPServer.getInstance().getIQDiscoInfoHandler().addServerFeature( Push0IQHandler.ELEMENT_NAMESPACE );
         XMPPServer.getInstance().getIQDiscoInfoHandler().addUserFeaturesProvider( push0IQHandler );
+
+        TerminationDelegateManager.registerDelegateForAll();
 
         if (ClusterManager.isSeniorClusterMember()) {
             timer.schedule(timerTask, Duration.ofMinutes(2).toMillis(), Duration.ofMinutes(2).toMillis());
@@ -132,8 +141,12 @@ public class PushNotificationPlugin implements Plugin, UserEventListener
         }
 
         UserEventDispatcher.removeListener( this );
-        OfflineMessageStrategy.removeListener( interceptor );
-        InterceptorManager.getInstance().removeInterceptor( interceptor );
+        OfflineMessageStrategy.removeListener(pushInterceptor);
+        SessionEventDispatcher.removeListener(terminationDelegateManager);
+        InterceptorManager.getInstance().removeInterceptor(terminationDelegateManager);
+        InterceptorManager.getInstance().removeInterceptor(pushInterceptor);
+
+        TerminationDelegateManager.deregisterDelegateForAll();
 
         Log.debug( "Destroyed." );
     }
