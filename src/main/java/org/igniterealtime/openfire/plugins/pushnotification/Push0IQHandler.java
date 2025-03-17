@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Ignite Realtime Foundation. All rights reserved.
+ * Copyright (C) 2019-2025 Ignite Realtime Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.igniterealtime.openfire.plugins.pushnotification;
 import org.dom4j.Element;
 import org.dom4j.QName;
 import org.dom4j.util.NodeComparator;
+import org.igniterealtime.openfire.plugins.pushnotification.streammanagement.TerminationDelegateManager;
 import org.jivesoftware.openfire.IQHandlerInfo;
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.auth.UnauthorizedException;
@@ -147,6 +148,7 @@ public class Push0IQHandler extends IQHandler implements UserFeaturesProvider
                     else
                     {
                         PushServiceManager.register( user, pushService, node, publishOptions );
+                        TerminationDelegateManager.registerDelegateFor(user);
                         Log.debug( "Registered push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername() } );
                     }
                     response = IQ.createResultIQ( packet );
@@ -163,6 +165,9 @@ public class Push0IQHandler extends IQHandler implements UserFeaturesProvider
                 try
                 {
                     PushServiceManager.deregister( user, pushService, node );
+                    if (!PushServiceManager.hasServiceNodes(user)) {
+                        TerminationDelegateManager.deregisterDelegateFor(user);
+                    }
                     Log.debug( "Deregistered push service '{}', node '{}', for user '{}'.", new Object[]{ pushService.toString(), node, user.getUsername() } );
                     response = IQ.createResultIQ( packet );
                 }

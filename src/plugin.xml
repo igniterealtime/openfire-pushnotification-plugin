@@ -7,9 +7,9 @@
     <version>${project.version}</version>
 
     <author>Guus der Kinderen</author>
-    <date>2024-09-12</date>
+    <date>2025-03-05</date>
 
-    <minServerVersion>4.8.0</minServerVersion>
+    <minServerVersion>5.0.0</minServerVersion>
 
     <databaseKey>pushnotification</databaseKey>
     <databaseVersion>1</databaseVersion>
