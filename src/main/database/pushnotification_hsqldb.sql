@@ -6,4 +6,4 @@ CREATE TABLE ofPushNotiService (
 );
 CREATE INDEX ofPushNoti_idx ON ofPushNotiService (username);
 
-INSERT INTO ofVersion (name, version) VALUES ('pushnotification', 1);
+INSERT INTO ofVersion (name, version) VALUES ('pushnotification', 2);

@@ -12,7 +12,7 @@
     <minServerVersion>5.0.0</minServerVersion>
 
     <databaseKey>pushnotification</databaseKey>
-    <databaseVersion>1</databaseVersion>
+    <databaseVersion>2</databaseVersion>
 
     <adminconsole>
         <tab id="tab-server">
