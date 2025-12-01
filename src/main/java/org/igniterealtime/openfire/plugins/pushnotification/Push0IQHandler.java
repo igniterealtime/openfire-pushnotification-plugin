@@ -17,7 +17,6 @@ package org.igniterealtime.openfire.plugins.pushnotification;
 
 import org.dom4j.Element;
 import org.dom4j.QName;
-import org.dom4j.util.NodeComparator;
 import org.igniterealtime.openfire.plugins.pushnotification.streammanagement.TerminationDelegateManager;
 import org.jivesoftware.openfire.IQHandlerInfo;
 import org.jivesoftware.openfire.XMPPServer;
@@ -140,7 +139,7 @@ public class Push0IQHandler extends IQHandler implements UserFeaturesProvider
                     final Element oldOptions = nodeOptions.get( node );
                     if ( nodeOptions.containsKey( node ) && (
                                ( publishOptions == null && oldOptions == null ) // both old and new options are null.
-                            || ( publishOptions != null && oldOptions != null && new NodeComparator().compare( publishOptions, oldOptions ) == 0 ) // old and new options are equal.
+                            || ( publishOptions != null && oldOptions != null && publishOptions.asXML().equals(oldOptions.asXML()) ) // old and new options are equal.
                             ) )
                     {
                         Log.debug( "Push service '{}', node '{}', for user '{}' was already registered.", new Object[]{ pushService.toString(), node, user.getUsername() } );
