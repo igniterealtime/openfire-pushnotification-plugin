@@ -33,4 +33,4 @@ FROM ofPushNotiService_dedup;
 -- Step 5: Drop the temporary table
 DROP TABLE ofPushNotiService_dedup;
 
-UPDATE ofVersion SET version = 2 WHERE name = 'pushnotification'
+UPDATE ofVersion SET version = 2 WHERE name = 'pushnotification';
